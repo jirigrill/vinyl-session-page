@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TV embed spike</title>
+<style>
+  body { margin: 0; background: #111; color: #eee; font: 24px/1.4 sans-serif; }
+  #wrap { padding: 16px; }
+  #player-box { width: 100%; max-width: 1280px; aspect-ratio: 16 / 9; background: #000; }
+  #player-box iframe { width: 100%; height: 100%; }
+  button { font-size: 28px; padding: 14px 24px; margin: 8px 8px 8px 0; background: #333; color: #fff; border: 3px solid #555; border-radius: 8px; }
+  button:focus { border-color: #ffd400; outline: none; background: #444; }
+  #log { font: 18px/1.3 monospace; white-space: pre-wrap; background: #000; padding: 12px; max-height: 260px; overflow: auto; }
+  h2 { margin: 16px 0 4px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>TV embed spike</h1>
+  <div id="ua"></div>
+
+  <h2>1. IFrame API player</h2>
+  <div id="player-box"><div id="player"></div></div>
+  <div>
+    <button id="b1" autofocus>Video 1</button>
+    <button id="b2">Video 2</button>
+    <button id="b3">Video 3</button>
+    <button id="bplay">Play</button>
+    <button id="bpause">Pause</button>
+    <button id="bfs">Fullscreen</button>
+    <button id="bunmute">Unmute</button>
+  </div>
+
+  <h2>2. Plain iframe (no API)</h2>
+  <button id="bplain">Load plain iframe</button>
+  <div id="plain-box" style="width:100%;max-width:1280px;aspect-ratio:16/9"></div>
+
+  <h2>Event log</h2>
+  <div id="log"></div>
+</div>
+
+<script>
+  var VIDEOS = ['HBNd3VZS3jA', '4g0nNa-mbcM', '2bEmWCwdCds'];
+  var player;
+  var logEl = document.getElementById('log');
+
+  function log(msg) {
+    var t = new Date().toISOString().substr(11, 8);
+    logEl.textContent = t + ' ' + msg + '\n' + logEl.textContent;
+  }
+
+  document.getElementById('ua').textContent = navigator.userAgent;
+  log('page loaded, origin=' + location.origin);
+
+  window.onerror = function (m, src, line) { log('JS ERROR: ' + m + ' @' + line); };
+
+  var STATES = { '-1': 'unstarted', 0: 'ended', 1: 'playing', 2: 'paused', 3: 'buffering', 5: 'cued' };
+
+  window.onYouTubeIframeAPIReady = function () {
+    log('IFrame API ready');
+    player = new YT.Player('player', {
+      width: '100%', height: '100%',
+      videoId: VIDEOS[0],
+      playerVars: { playsinline: 1, rel: 0, origin: location.origin },
+      events: {
+        onReady: function () { log('player ready'); },
+        onStateChange: function (e) { log('state: ' + (STATES[e.data] || e.data)); },
+        onError: function (e) { log('PLAYER ERROR code ' + e.data + ' (2 bad id, 5 html5, 100 not found, 101/150 embed blocked, 153 missing referrer)'); }
+      }
+    });
+  };
+
+  var s = document.createElement('script');
+  s.src = 'https://www.youtube.com/iframe_api';
+  s.onerror = function () { log('FAILED to load YouTube IFrame API script'); };
+  document.head.appendChild(s);
+
+  function load(i) { if (player && player.loadVideoById) { log('load video ' + (i + 1)); player.loadVideoById(VIDEOS[i]); } else log('player not ready'); }
+  document.getElementById('b1').onclick = function () { load(0); };
+  document.getElementById('b2').onclick = function () { load(1); };
+  document.getElementById('b3').onclick = function () { load(2); };
+  document.getElementById('bplay').onclick = function () { player.playVideo(); };
+  document.getElementById('bpause').onclick = function () { player.pauseVideo(); };
+  document.getElementById('bunmute').onclick = function () { player.unMute(); log('muted=' + player.isMuted()); };
+  document.getElementById('bfs').onclick = function () {
+    var f = player.getIframe();
+    var req = f.requestFullscreen || f.webkitRequestFullscreen;
+    if (req) { req.call(f); log('requested fullscreen'); } else log('fullscreen API not available');
+  };
+  document.getElementById('bplain').onclick = function () {
+    var box = document.getElementById('plain-box');
+    box.innerHTML = '<iframe width="100%" height="100%" src="https://www.youtube.com/embed/' + VIDEOS[0] +
+      '" allow="autoplay; encrypted-media; fullscreen" allowfullscreen frameborder="0"></iframe>';
+    log('plain iframe loaded');
+  };
+</script>
+</body>
+</html>
