@@ -1,0 +1,40 @@
+[Unit]
+Description=Vinyl session page
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vinyl
+Group=vinyl
+EnvironmentFile=/etc/vinyl/vinyl.env
+Environment=VINYL_ADDR=127.0.0.1:8080
+Environment=VINYL_DATA_DIR=/var/lib/vinyl
+ExecStart=/opt/vinyl/vinyl
+Restart=on-failure
+RestartSec=2
+
+StateDirectory=vinyl
+StateDirectoryMode=0750
+
+# Sandbox
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+ReadWritePaths=/var/lib/vinyl
+
+# Keep the app off the Tailscale network (home services)
+IPAddressDeny=100.64.0.0/10 fd7a:115c:a1e0::/48
+
+# Droplet has 457 MB RAM
+MemoryMax=64M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
