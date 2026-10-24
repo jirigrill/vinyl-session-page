@@ -1,83 +1,81 @@
-# Vinyl Session Page: Requirements (draft v0.1)
+# Vinyl Session Page: Requirements (v0.2)
 
 ## Vision
-Aggregator of vinyl/DJ session videos with rich filtering (mood, scene, ...) and optional creator tipping. No video hosting; official embeds only.
+Personal aggregator of vinyl/DJ session videos with filtering by mood, genre, scene/setting and duration. Pick a session on the iPhone, it plays on the Android TV. No media hosted; official YouTube embeds only.
 
-## Constraints (from research)
-- Embed via official players only (YouTube IFrame API etc.). No overlays on the player, no ad blocking, no audio-only extraction, no restreaming.
-- No paywall on YouTube content.
-- Ads: Premium users ad-free only via their own YouTube session. Not controllable, not promised.
-- Money non-custodial. Creators supply own wallet/Lightning address and must opt in.
-- Creator consent (email) before featuring branding or enabling payments.
+## Success criterion (MVP done when)
+"I pick a mood on my phone and a session plays on my TV."
 
-## MVP (Phase 1)
-### Catalog
-- [ ] Curated list of YouTube videos (add by URL, metadata fetched via YouTube Data API)
-- [ ] Fields: title, channel, duration, thumbnail, embed id, tags, added date
-- [ ] Admin-only add/edit/remove (no public submissions yet)
-- [ ] Dead/removed video detection
+## Constraints
+- Official YouTube IFrame player only, unmodified. No overlays on the player, no ad blocking, no audio-only extraction, no restreaming, no paywall on content.
+- Ads: Premium users are ad-free only via their own YouTube session. Not controllable, not promised.
+- No video/media storage. Only metadata (and thumbnails by URL).
+- Budget: only the existing DigitalOcean droplet.
+- English-only UI.
+- Single user (the owner) in MVP. Public repo, but no public launch yet.
+- Czech Republic, personal project. No payments in MVP, so no legal entity needed yet.
 
-### Filtering and discovery
-- [ ] Tag dimensions: mood, scene/setting, genre, format (vinyl/digital), duration, BPM range (optional), channel
-- [ ] Multi-select filters, combinable, URL-shareable
-- [ ] Text search (title, channel, tags)
-- [ ] Sort: newest, duration, popular
+## Stack
+Go + SQLite + HTMX. Server-rendered, single binary, systemd on droplet. Owner has no Go experience (learning goal); Python avoided.
 
-### Playback
-- [ ] Embedded YouTube player page per session
-- [ ] Respect YouTube API ToS (unmodified player, no overlays)
-- [ ] Link-out/"open on YouTube" fallback
+## MVP scope
 
-### Accounts
-- [ ] Sign in with Google (OAuth, minimal scopes)
-- [ ] Favorites / watch later
-- [ ] Anonymous browsing allowed
+### 1. Ingest (one-shot, manual run)
+- [ ] Seed channels from `data/seed-channels.txt` (REANALOG, Chilled_Sundays, breakfasttilt, CrateGuest, incrediblecoffee2020)
+- [ ] Resolve handle to channel and uploads playlist via YouTube Data API v3 (key in `.env`, never committed)
+- [ ] Store per video: id, title, channel, duration, thumbnail URL, published date, description
+- [ ] Filter out non-sessions (shorts, trailers, very short videos) with simple rules
+- [ ] Idempotent: re-running does not duplicate
+- [ ] Automated refresh is NOT in MVP (later)
 
-### Creator tipping (DEFERRED, not in Phase 1)
-- [ ] Per-channel tip link (Ko-fi, Lightning address, etc.) shown next to the player
-- [ ] Creator opt-in flag; hidden if not opted in
-- [ ] No funds held by us
+### 2. AI tagging (fully automatic, no manual tagging)
+- [ ] Pass 1: AI proposes tag taxonomy from the seed catalog
+- [ ] Pass 2: AI tags each video using title, description, channel, duration
+- [ ] Tag dimensions: **mood/time of day** (morning breakfast, evening dinner, others as AI finds), **genre**, **scene/setting**, **duration** (derived)
+- [ ] Tags stored in SQLite with taxonomy version, so re-tagging is possible when prompts improve
+- [ ] No manual tag editing UI. Improvement path is better prompts/models, not manual work.
 
-### Legal/compliance
-- [ ] Terms, privacy policy, cookie consent (GDPR)
-- [ ] Takedown/contact process
-- [ ] Lawyer review before any payment or fee handling
+### 3. Browse and filter (phone-first)
+- [ ] Filters: mood, genre, scene/setting, duration range
+- [ ] Combinable, shareable URL state
+- [ ] Video cards: thumbnail, title, channel, duration, tags
+- [ ] Responsive, mobile-first
 
-### Non-functional
-- [ ] Responsive/mobile-first
-- [ ] Fast load (SSR or static + API)
-- [ ] YouTube API quota handling (cache metadata)
-- [ ] Basic analytics (privacy-friendly)
+### 4. Playback: select and play
+- [ ] Select one video and play it. No queue, autoplay-next, shuffle or playlists in MVP.
+- [ ] Embedded YouTube player page
+- [ ] "Open on YouTube" fallback
 
-## Phase 2
-- [ ] In-page payments (non-custodial: BTCPay/Strike/Stripe Connect) with 10% platform fee
-- [ ] Creator onboarding portal (claim channel, set wallet, edit tags)
-- [ ] Other platform embeds (Mixcloud, Twitch, Vimeo, SoundCloud)
-- [ ] Account linking for platform-specific perks
-- [ ] Community tagging / submissions with moderation
+### 5. TV remote (phone as remote)
+- [ ] TV opens a "player" page showing a pairing code/QR
+- [ ] iPhone enters/scans the code and pairs
+- [ ] Choosing a video on the phone makes the TV page load and play it (WebSocket)
+- [ ] Basic controls from phone: play/pause, stop (nice to have)
+- [ ] Test early: YouTube embed playback in the Android TV browser/WebView
+- [ ] Browsing with the TV's own remote is deferred (wanted later)
 
-## Phase 3 (ideas)
-- [ ] Playlists, queues, sharing
-- [ ] Recommendations by mood
-- [ ] Per-creator pages
-- [ ] Streaming-sats while watching
+### 6. Hosting
+- [ ] Deploy on existing DigitalOcean droplet behind existing reverse proxy, HTTPS
+- [ ] Basic auth on phone UI; TV uses expiring single-use pairing code
+- [ ] Backup = SQLite file copy
 
-## Decisions
-- Public repo on personal GitHub (jirigrill).
-- Hosting: existing DigitalOcean droplet. No video/media storage. Minimal budget.
-- Jurisdiction: Czech Republic, personal project (no entity yet).
-- Tagging: AI-assisted. Seed list first, then AI defines taxonomy and tags.
-- Seed catalog: scrape metadata from a few vinyl-session YouTube channels (official YouTube Data API preferred over scraping HTML).
-- Tipping: deferred out of Phase 1. Revisit after core page works.
-- Ultimate goal: Android TV at home, session picked from iPhone and cast/streamed to TV.
+## Out of MVP (later)
+- Automated refresh of new uploads
+- Better AI tagging quality, re-tagging pipeline, evaluation
+- TV-remote browsing (D-pad navigation)
+- Queue, autoplay, shuffle, playlists, favorites
+- Other platforms (Mixcloud, Twitch, Vimeo, SoundCloud)
+- Accounts/Google login, multi-user, public launch
+- Creator tipping and payments (non-custodial, creator opt-in)
+- Native Android TV app, Cast
+- Community features
 
-## Platform strategy (TV goal)
-- Phase 1: responsive web app (PWA-capable).
-- TV options to evaluate: (a) web app opened in Android TV browser/WebView, (b) iPhone as remote controlling the TV page via WebSocket "pairing" (session code/QR), (c) native Android TV app (Kotlin/Compose) later, (d) Google Cast sender/receiver.
-- Likely pick: web app + remote-control pairing (b). Works with YouTube embeds on TV without native app.
-- Stack to be decided; SvelteKit is a candidate (skills available).
+## Decisions (open questions resolved)
+- TV browser/WebView: unknown, decided by testing on the TV.
+- Tagging LLM: free tiers only (e.g. Gemini, Groq, OpenRouter free models, Mistral). Separate tagging pipeline/app, decoupled from the web app, provider-swappable. Input is public metadata only.
+- Legal check: owner skips it. No payments in scope until revisited by owner.
+
+- Access protection: HTTP basic auth at reverse proxy for phone/UI. TV page is unauthenticated except for a short-lived, random pairing code created on the TV and confirmed from the authenticated phone. Pairing code expires and is single-use.
 
 ## Open questions
-1. Final stack choice (SvelteKit vs alternatives)?
-2. Which channels form the seed set?
-3. Czech legal check (hobby income, VAT, crypto) before Phase 2 payments.
+None blocking. Revisit after TV embed test.
