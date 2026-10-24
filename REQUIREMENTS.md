@@ -51,7 +51,7 @@ Go + SQLite + HTMX. Server-rendered, single binary, systemd on droplet. Owner ha
 - [ ] iPhone enters/scans the code and pairs
 - [ ] Choosing a video on the phone makes the TV page load and play it (WebSocket)
 - [ ] Basic controls from phone: play/pause, stop (nice to have)
-- [ ] Test early: YouTube embed playback in the Android TV browser/WebView
+- [x] Test early: YouTube embed playback on the TV (passed, ticket #1)
 - [ ] Browsing with the TV's own remote is deferred (wanted later)
 
 ### 6. Hosting
@@ -71,11 +71,12 @@ Go + SQLite + HTMX. Server-rendered, single binary, systemd on droplet. Owner ha
 - Community features
 
 ## Decisions (open questions resolved)
-- TV browser/WebView: unknown, decided by testing on the TV.
+- TV browser: Philips One TV default browser. YouTube embed, sound, fullscreen and D-pad focus verified (ticket #1).
+- Video-playing pages must be served over HTTPS from a real domain. Plain HTTP on an IP origin triggers YouTube error 150 for many videos.
 - Tagging LLM: free tiers only (e.g. Gemini, Groq, OpenRouter free models, Mistral). Separate tagging pipeline/app, decoupled from the web app, provider-swappable. Input is public metadata only.
 - Legal check: owner skips it. No payments in scope until revisited by owner.
 
 - Access protection: HTTP basic auth at reverse proxy for phone/UI. TV page is unauthenticated except for a short-lived, random pairing code created on the TV and confirmed from the authenticated phone. Pairing code expires and is single-use.
 
 ## Open questions
-None blocking. Revisit after TV embed test.
+None blocking.
