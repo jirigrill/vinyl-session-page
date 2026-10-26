@@ -1,0 +1,1 @@
+{"kind":"youtube#playlistItemListResponse","pageInfo":{"totalResults":4,"resultsPerPage":2},"items":[{"kind":"youtube#playlistItem","contentDetails":{"videoId":"vidTrailer1","videoPublishedAt":"2026-07-01T12:00:00Z"}},{"kind":"youtube#playlistItem","contentDetails":{"videoId":"vidSession2","videoPublishedAt":"2026-06-15T19:30:00Z"}}]}

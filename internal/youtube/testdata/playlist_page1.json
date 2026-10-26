@@ -1,0 +1,1 @@
+{"kind":"youtube#playlistItemListResponse","nextPageToken":"EAAaBlBUOkNBTQ","pageInfo":{"totalResults":4,"resultsPerPage":2},"items":[{"kind":"youtube#playlistItem","contentDetails":{"videoId":"vidSession1","videoPublishedAt":"2026-09-01T18:00:00Z"}},{"kind":"youtube#playlistItem","contentDetails":{"videoId":"vidShort001","videoPublishedAt":"2026-08-20T10:00:00Z"}}]}
