@@ -21,11 +21,11 @@ Go + SQLite + HTMX. Server-rendered, single binary, systemd on droplet. Owner ha
 ## MVP scope
 
 ### 1. Ingest (one-shot, manual run)
-- [ ] Seed channels from `data/seed-channels.txt` (REANALOG, Chilled_Sundays, breakfasttilt, CrateGuest, incrediblecoffee2020)
-- [ ] Resolve handle to channel and uploads playlist via YouTube Data API v3 (key in `.env`, never committed)
-- [ ] Store per video: id, title, channel, duration, thumbnail URL, published date, description
-- [ ] Filter out non-sessions (shorts, trailers, very short videos) with simple rules
-- [ ] Idempotent: re-running does not duplicate
+- [x] Seed channels from `data/seed-channels.txt` (REANALOG, Chilled_Sundays, breakfasttilt, CrateGuest, incrediblecoffee2020)
+- [x] Resolve handle to channel and uploads playlist via YouTube Data API v3 (key in `.env`, never committed)
+- [x] Store per video: id, title, channel, duration, thumbnail URL, published date, description
+- [x] Filter out non-sessions (shorts, trailers, very short videos) with simple rules
+- [x] Idempotent: re-running does not duplicate
 - [ ] Automated refresh is NOT in MVP (later)
 
 ### 2. AI tagging (fully automatic, no manual tagging)
@@ -77,6 +77,8 @@ Go + SQLite + HTMX. Server-rendered, single binary, systemd on droplet. Owner ha
 - Legal check: owner skips it. No payments in scope until revisited by owner.
 
 - Access protection: HTTP basic auth at reverse proxy for phone/UI. TV page is unauthenticated except for a short-lived, random pairing code created on the TV and confirmed from the authenticated phone. Pairing code expires and is single-use.
+
+- Data: the droplet's SQLite file is the source of truth. YouTube API key is IP-restricted to the droplet, so ingest runs there; local development uses a pulled snapshot (automation: #16).
 
 ## Open questions
 None blocking.
