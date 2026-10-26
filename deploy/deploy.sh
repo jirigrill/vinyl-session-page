@@ -3,7 +3,7 @@
 # Usage: deploy/deploy.sh [ssh-target]   (default root@142.93.99.205)
 set -euo pipefail
 
-HOST="${1:-root@142.93.99.205}"
+HOST="${1:-root@142.93.99.205}"  # keep in sync with HOST in Makefile
 cd "$(dirname "$0")/.."
 
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /tmp/vinyl ./cmd/vinyl

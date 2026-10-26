@@ -12,26 +12,24 @@ development uses a disposable snapshot of it.
 
 ## Local development
 
-Manual for now; automating it with a `Makefile` is tracked in #16.
-
 ```sh
-scp root@142.93.99.205:'/var/lib/vinyl/vinyl.db*' .   # snapshot of prod catalog
-VINYL_USER=dev VINYL_PASSWORD=dev go run ./cmd/vinyl  # http://127.0.0.1:8080
-go test ./...
+cp .env.example .env   # fill in values; VINYL_USER/VINYL_PASSWORD default to dev/dev
+make pull-db           # snapshot prod catalog into data/local/
+make run               # http://127.0.0.1:8080
+make test vet fmt
 ```
 
-Copy all three `vinyl.db*` files: the database uses SQLite WAL mode, so the
-main file alone can miss recent writes. Don't commit them.
+`make` lists all targets. The droplet is `HOST` in the `Makefile`; override
+with `make deploy HOST=root@other`. The snapshot copies all three `vinyl.db*`
+files (SQLite WAL mode) and is git-ignored.
 
 ## Ingest
 
-One-shot import of the channels in `data/seed-channels.txt`. Run it on the
-droplet (the API key is rejected elsewhere):
+One-shot import of the channels in `data/seed-channels.txt`. It runs on the
+droplet (the API key is rejected elsewhere), using `YT_DATA_API_KEY` from `.env`:
 
 ```sh
-scp data/seed-channels.txt root@142.93.99.205:/tmp/
-ssh root@142.93.99.205 'cd /tmp && runuser -u vinyl -- env YT_DATA_API_KEY=... \
-  VINYL_DATA_DIR=/var/lib/vinyl VINYL_SEED_FILE=/tmp/seed-channels.txt /opt/vinyl/vinyl ingest'
+make ingest-remote
 ```
 
 Re-running is safe: existing videos are updated, not duplicated. Quota cost is
