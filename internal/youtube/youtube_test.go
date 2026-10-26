@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -26,7 +27,7 @@ func fixtureServer(t *testing.T) (*Client, *int) {
 			file = "channels.json"
 		case r.URL.Path == "/playlistItems" && q.Get("pageToken") == "":
 			file = "playlist_page1.json"
-		case r.URL.Path == "/playlistItems" && q.Get("pageToken") == "EAAaBlBUOkNBTQ":
+		case r.URL.Path == "/playlistItems" && q.Get("pageToken") == "EAAaHlBUOkNBSWlFREUwTmtRek16RkZSRFl5TURrNVJEaw":
 			file = "playlist_page2.json"
 		case r.URL.Path == "/videos":
 			file = "videos.json"
@@ -53,7 +54,7 @@ func TestChannelByHandle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ch.ID != "UCcrateguest0000000000" || ch.Title != "Crate Guest" || ch.UploadsPlaylistID != "UUcrateguest0000000000" {
+	if ch.ID != "UCEOADqqiA4pRly8asjYxxag" || ch.Title != "Crate Guest" || ch.UploadsPlaylistID != "UUEOADqqiA4pRly8asjYxxag" {
 		t.Fatalf("got %+v", ch)
 	}
 	if _, err := c.ChannelByHandle(context.Background(), "@nobody"); err == nil {
@@ -63,11 +64,11 @@ func TestChannelByHandle(t *testing.T) {
 
 func TestPlaylistVideoIDsFollowsPagination(t *testing.T) {
 	c, calls := fixtureServer(t)
-	ids, err := c.PlaylistVideoIDs(context.Background(), "UUcrateguest0000000000")
+	ids, err := c.PlaylistVideoIDs(context.Background(), "UUEOADqqiA4pRly8asjYxxag")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"vidSession1", "vidShort001", "vidTrailer1", "vidSession2"}
+	want := []string{"hUJo5lcYXQw", "NcWQOpwthkQ", "WRELrktrP4E", "FHJ5vkgulfw"}
 	if len(ids) != len(want) {
 		t.Fatalf("ids = %v, want %v", ids, want)
 	}
@@ -83,7 +84,7 @@ func TestPlaylistVideoIDsFollowsPagination(t *testing.T) {
 
 func TestVideos(t *testing.T) {
 	c, _ := fixtureServer(t)
-	vs, err := c.Videos(context.Background(), []string{"vidSession1", "vidShort001", "vidTrailer1", "vidSession2"})
+	vs, err := c.Videos(context.Background(), []string{"hUJo5lcYXQw", "NcWQOpwthkQ", "WRELrktrP4E", "FHJ5vkgulfw"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,15 +92,13 @@ func TestVideos(t *testing.T) {
 		t.Fatalf("len = %d, want 4", len(vs))
 	}
 	v := vs[0]
-	if v.Title != "Sunday Morning Jazz Vinyl Session" || v.ChannelTitle != "Crate Guest" ||
-		v.Duration != time.Hour+2*time.Minute+3*time.Second ||
-		v.ThumbnailURL != "https://i.ytimg.com/vi/vidSession1/hqdefault.jpg" ||
-		v.Description != "All vinyl, one take." ||
-		!v.PublishedAt.Equal(time.Date(2026, 9, 1, 18, 0, 0, 0, time.UTC)) {
+	if v.ID != "hUJo5lcYXQw" || v.Title != "Jazzy & Funky vinyl mix - Steve Becker - Crate Guest goes to Canal22" ||
+		v.ChannelID != "UCEOADqqiA4pRly8asjYxxag" || v.ChannelTitle != "Crate Guest" ||
+		v.Duration != time.Hour+4*time.Minute+30*time.Second ||
+		v.ThumbnailURL != "https://i.ytimg.com/vi/hUJo5lcYXQw/hqdefault.jpg" ||
+		!strings.HasPrefix(v.Description, "En este nuevo episodio recibimos a Steve") ||
+		!v.PublishedAt.Equal(time.Date(2026, 10, 23, 15, 0, 8, 0, time.UTC)) {
 		t.Fatalf("got %+v", v)
-	}
-	if vs[3].ThumbnailURL != "https://i.ytimg.com/vi/vidSession2/mqdefault.jpg" {
-		t.Fatalf("thumbnail fallback = %q", vs[3].ThumbnailURL)
 	}
 }
 

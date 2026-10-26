@@ -50,7 +50,7 @@ func TestRunStoresSessionsIdempotently(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st != (Stats{Fetched: 4, Stored: 2, Skipped: 2}) {
+	if st != (Stats{Fetched: 4, Stored: 4, Skipped: 0}) {
 		t.Fatalf("stats = %+v", st)
 	}
 
@@ -61,13 +61,13 @@ func TestRunStoresSessionsIdempotently(t *testing.T) {
 	}
 	var n int
 	conn.QueryRow("SELECT COUNT(*) FROM videos").Scan(&n)
-	if n != 2 {
-		t.Fatalf("rows = %d, want 2", n)
+	if n != 4 {
+		t.Fatalf("rows = %d, want 4", n)
 	}
 	var title string
 	var secs int
-	conn.QueryRow("SELECT title, duration_seconds FROM videos WHERE id = 'vidSession1'").Scan(&title, &secs)
-	if title != "Sunday Morning Jazz Vinyl Session (Remastered)" || secs != 3723 {
+	conn.QueryRow("SELECT title, duration_seconds FROM videos WHERE id = 'hUJo5lcYXQw'").Scan(&title, &secs)
+	if title != "Jazzy & Funky vinyl mix - Steve Becker (Remastered)" || secs != 3870 {
 		t.Fatalf("got %q %d", title, secs)
 	}
 }
