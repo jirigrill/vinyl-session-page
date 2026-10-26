@@ -1,0 +1,252 @@
+{
+  "kind": "youtube#videoListResponse",
+  "items": [
+    {
+      "kind": "youtube#video",
+      "id": "hUJo5lcYXQw",
+      "snippet": {
+        "publishedAt": "2026-10-23T15:00:08Z",
+        "channelId": "UCEOADqqiA4pRly8asjYxxag",
+        "title": "Jazzy & Funky vinyl mix - Steve Becker - Crate Guest goes to Canal22",
+        "description": "En este nuevo episodio recibimos a Steve, chef, melómano, DJ y selektor colombiano radicado en Buenos Aires 🇨🇴🇦🇷, residente de Bimbi-Nilo y una persona cuyo universo creativo cruza constantemente la m",
+        "thumbnails": {
+          "default": {
+            "url": "https://i.ytimg.com/vi/hUJo5lcYXQw/default.jpg",
+            "width": 120,
+            "height": 90
+          },
+          "medium": {
+            "url": "https://i.ytimg.com/vi/hUJo5lcYXQw/mqdefault.jpg",
+            "width": 320,
+            "height": 180
+          },
+          "high": {
+            "url": "https://i.ytimg.com/vi/hUJo5lcYXQw/hqdefault.jpg",
+            "width": 480,
+            "height": 360
+          },
+          "standard": {
+            "url": "https://i.ytimg.com/vi/hUJo5lcYXQw/sddefault.jpg",
+            "width": 640,
+            "height": 480
+          },
+          "maxres": {
+            "url": "https://i.ytimg.com/vi/hUJo5lcYXQw/maxresdefault.jpg",
+            "width": 1280,
+            "height": 720
+          },
+          "fhd": {
+            "url": "https://i.ytimg.com/vi/hUJo5lcYXQw/fhddefault.jpg",
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "channelTitle": "Crate Guest",
+        "categoryId": "10",
+        "liveBroadcastContent": "none",
+        "defaultLanguage": "es"
+      },
+      "contentDetails": {
+        "duration": "PT1H4M30S",
+        "dimension": "2d",
+        "definition": "hd",
+        "caption": "false",
+        "licensedContent": false,
+        "regionRestriction": {
+          "blocked": [
+            "RU"
+          ]
+        },
+        "contentRating": {},
+        "projection": "rectangular"
+      }
+    },
+    {
+      "kind": "youtube#video",
+      "id": "NcWQOpwthkQ",
+      "snippet": {
+        "publishedAt": "2026-10-02T15:00:09Z",
+        "channelId": "UCEOADqqiA4pRly8asjYxxag",
+        "title": "ESTRENAMOS nuestro CAFÉ | Clo & Tincho | CRATE CAFÉ",
+        "description": "Bienvenidos a CRATE CAFÉ! ☕💿🥐🧡\n\nAbrimos las puertas de nuestra nueva casa, un espacio para seguir juntándonos a escuchar música y compartir un cafecito entre amigos!\n\nEn este primer episodio, quisimos",
+        "thumbnails": {
+          "default": {
+            "url": "https://i.ytimg.com/vi/NcWQOpwthkQ/default.jpg",
+            "width": 120,
+            "height": 90
+          },
+          "medium": {
+            "url": "https://i.ytimg.com/vi/NcWQOpwthkQ/mqdefault.jpg",
+            "width": 320,
+            "height": 180
+          },
+          "high": {
+            "url": "https://i.ytimg.com/vi/NcWQOpwthkQ/hqdefault.jpg",
+            "width": 480,
+            "height": 360
+          },
+          "standard": {
+            "url": "https://i.ytimg.com/vi/NcWQOpwthkQ/sddefault.jpg",
+            "width": 640,
+            "height": 480
+          },
+          "maxres": {
+            "url": "https://i.ytimg.com/vi/NcWQOpwthkQ/maxresdefault.jpg",
+            "width": 1280,
+            "height": 720
+          },
+          "fhd": {
+            "url": "https://i.ytimg.com/vi/NcWQOpwthkQ/fhddefault.jpg",
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "channelTitle": "Crate Guest",
+        "categoryId": "10",
+        "liveBroadcastContent": "none",
+        "defaultLanguage": "es"
+      },
+      "contentDetails": {
+        "duration": "PT1H3M3S",
+        "dimension": "2d",
+        "definition": "hd",
+        "caption": "false",
+        "licensedContent": false,
+        "regionRestriction": {
+          "blocked": [
+            "BY",
+            "RU"
+          ]
+        },
+        "contentRating": {},
+        "projection": "rectangular"
+      }
+    },
+    {
+      "kind": "youtube#video",
+      "id": "WRELrktrP4E",
+      "snippet": {
+        "publishedAt": "2026-07-31T15:00:06Z",
+        "channelId": "UCEOADqqiA4pRly8asjYxxag",
+        "title": "Freestyle Vinyl mix (Salsa, Disco, Funk & House) - EL DOG",
+        "description": "DJ, productor musical y multiinstrumentista argentino, EL DOG fue fundador y compositor de Lo' Pibitos, banda con la que llegó a abrir un show de Bruno Mars. En los últimos años también recorrió el mu",
+        "thumbnails": {
+          "default": {
+            "url": "https://i.ytimg.com/vi/WRELrktrP4E/default.jpg",
+            "width": 120,
+            "height": 90
+          },
+          "medium": {
+            "url": "https://i.ytimg.com/vi/WRELrktrP4E/mqdefault.jpg",
+            "width": 320,
+            "height": 180
+          },
+          "high": {
+            "url": "https://i.ytimg.com/vi/WRELrktrP4E/hqdefault.jpg",
+            "width": 480,
+            "height": 360
+          },
+          "standard": {
+            "url": "https://i.ytimg.com/vi/WRELrktrP4E/sddefault.jpg",
+            "width": 640,
+            "height": 480
+          },
+          "maxres": {
+            "url": "https://i.ytimg.com/vi/WRELrktrP4E/maxresdefault.jpg",
+            "width": 1280,
+            "height": 720
+          },
+          "fhd": {
+            "url": "https://i.ytimg.com/vi/WRELrktrP4E/fhddefault.jpg",
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "channelTitle": "Crate Guest",
+        "categoryId": "10",
+        "liveBroadcastContent": "none",
+        "defaultLanguage": "es"
+      },
+      "contentDetails": {
+        "duration": "PT1H4M56S",
+        "dimension": "2d",
+        "definition": "hd",
+        "caption": "false",
+        "licensedContent": false,
+        "regionRestriction": {
+          "blocked": [
+            "RU"
+          ]
+        },
+        "contentRating": {},
+        "projection": "rectangular"
+      }
+    },
+    {
+      "kind": "youtube#video",
+      "id": "FHJ5vkgulfw",
+      "snippet": {
+        "publishedAt": "2026-07-17T15:00:06Z",
+        "channelId": "UCEOADqqiA4pRly8asjYxxag",
+        "title": "Jazz, Soul, Ambient en una CAFETERÍA - VARDIE - Crate Guest Goes to SURCH",
+        "description": "En este nuevo episodio de Crate Guest recibimos a var.die 🇧🇴, melómano, DJ/selector y coleccionista de discos nacido en Bolivia, cuya relación con la música comenzó gracias a la colección de vinilos h",
+        "thumbnails": {
+          "default": {
+            "url": "https://i.ytimg.com/vi/FHJ5vkgulfw/default.jpg",
+            "width": 120,
+            "height": 90
+          },
+          "medium": {
+            "url": "https://i.ytimg.com/vi/FHJ5vkgulfw/mqdefault.jpg",
+            "width": 320,
+            "height": 180
+          },
+          "high": {
+            "url": "https://i.ytimg.com/vi/FHJ5vkgulfw/hqdefault.jpg",
+            "width": 480,
+            "height": 360
+          },
+          "standard": {
+            "url": "https://i.ytimg.com/vi/FHJ5vkgulfw/sddefault.jpg",
+            "width": 640,
+            "height": 480
+          },
+          "maxres": {
+            "url": "https://i.ytimg.com/vi/FHJ5vkgulfw/maxresdefault.jpg",
+            "width": 1280,
+            "height": 720
+          },
+          "fhd": {
+            "url": "https://i.ytimg.com/vi/FHJ5vkgulfw/fhddefault.jpg",
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        "channelTitle": "Crate Guest",
+        "categoryId": "10",
+        "liveBroadcastContent": "none",
+        "defaultLanguage": "es"
+      },
+      "contentDetails": {
+        "duration": "PT52M59S",
+        "dimension": "2d",
+        "definition": "hd",
+        "caption": "false",
+        "licensedContent": false,
+        "regionRestriction": {
+          "blocked": [
+            "BY",
+            "RU",
+            "VU"
+          ]
+        },
+        "contentRating": {},
+        "projection": "rectangular"
+      }
+    }
+  ],
+  "pageInfo": {
+    "totalResults": 4,
+    "resultsPerPage": 4
+  }
+}

@@ -17,8 +17,8 @@ func TestOpenCreatesAndMigrates(t *testing.T) {
 		if err := conn.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 			t.Fatal(err)
 		}
-		if version != 1 {
-			t.Fatalf("user_version = %d, want 1", version)
+		if version != 2 {
+			t.Fatalf("user_version = %d, want 2", version)
 		}
 		if _, err := conn.Exec("INSERT OR REPLACE INTO app_meta(key, value) VALUES ('k', 'v')"); err != nil {
 			t.Fatalf("app_meta missing: %v", err)

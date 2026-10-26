@@ -1,0 +1,18 @@
+{
+  "kind": "youtube#channelListResponse",
+  "items": [
+    {
+      "kind": "youtube#channel",
+      "id": "UCEOADqqiA4pRly8asjYxxag",
+      "snippet": {
+        "title": "Crate Guest"
+      },
+      "contentDetails": {
+        "relatedPlaylists": {
+          "likes": "",
+          "uploads": "UUEOADqqiA4pRly8asjYxxag"
+        }
+      }
+    }
+  ]
+}

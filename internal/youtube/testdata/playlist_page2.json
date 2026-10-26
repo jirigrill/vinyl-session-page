@@ -1,0 +1,23 @@
+{
+  "kind": "youtube#playlistItemListResponse",
+  "items": [
+    {
+      "kind": "youtube#playlistItem",
+      "contentDetails": {
+        "videoId": "WRELrktrP4E",
+        "videoPublishedAt": "2026-07-31T15:00:06Z"
+      }
+    },
+    {
+      "kind": "youtube#playlistItem",
+      "contentDetails": {
+        "videoId": "FHJ5vkgulfw",
+        "videoPublishedAt": "2026-07-17T15:00:06Z"
+      }
+    }
+  ],
+  "pageInfo": {
+    "totalResults": 119,
+    "resultsPerPage": 2
+  }
+}
