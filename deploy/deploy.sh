@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Build and deploy vinyl to the droplet. Idempotent; safe to re-run.
-# Usage: deploy/deploy.sh [ssh-target]   (default root@164.92.236.31)
+# Usage: deploy/deploy.sh [ssh-target]   (default root@142.93.99.205)
 set -euo pipefail
 
-HOST="${1:-root@164.92.236.31}"
+HOST="${1:-root@142.93.99.205}"
 cd "$(dirname "$0")/.."
 
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /tmp/vinyl ./cmd/vinyl
