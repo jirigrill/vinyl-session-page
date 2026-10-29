@@ -236,7 +236,7 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 - Quota state is kept in JSON on a `factory-state` branch. Only a state workflow writes it, through a `factory-state` concurrency group; workers send it events and never push to the branch.
 - When all providers are exhausted, the factory sleeps until the earliest reset; this is reported in the digest, not as an alert.
 - Alert only if all providers stay exhausted for more than 24h.
-- 🔍 **Investigate:** reuse an existing router or fallback solution before building one (opencode provider config, OpenRouter auto-routing, LiteLLM, free-model aggregators).
+- 🔍 **Candidates found:** LiteLLM proxy with Redis (preferred), freellmapi as the alternative. See [Open-source candidates](#open-source-candidates).
 
 #### 8d. Idle-mode triggers
 - `issues` and `issue_comment` events from allowlisted authors.
@@ -344,11 +344,16 @@ All through GitHub:
   - `spec-defect` vs `impl-defect` share of failures (2)
   - private Actions minutes used (8e)
 - The log is append-only and written by a workflow, not by agents, so agents can't edit their own history.
-- 🔍 **Investigate in a standalone grilling session** which store to use, and prefer an existing solution (e.g. opencode's built-in stats, Langfuse, OpenTelemetry-based LLM tracing).
+- 🔍 **Candidates found:** Langfuse fed by LiteLLM's built-in integration (preferred), Arize Phoenix as the alternative, plus `opencode stats` and `opencode export`. Confirm in a standalone grilling session. See [Open-source candidates](#open-source-candidates).
 
 ### 15. Harness
 - Build on the opencode GitHub integration for each agent role, with our own orchestration workflows for triage, fan-out, merge and deploy.
-- 🔍 **Verify first:** headless runs, per-role model selection, custom agents and prompts. Fallback: the `opencode run` CLI inside Actions jobs.
+- Confirmed from the opencode docs: headless runs, per-role model selection, custom agents and prompts. Two layers:
+  - the opencode GitHub action for roles triggered by one event (triage, reviewer on PRs)
+  - `opencode run` inside our own jobs for the builder chain, prototypes and the scenario agent
+- Per-role agent config and permissions are injected by the workflow (`OPENCODE_CONFIG_CONTENT`, `OPENCODE_PERMISSION`), and repo config is ignored (`OPENCODE_DISABLE_PROJECT_CONFIG`), so a builder PR can't loosen its own permissions (10a).
+- 🔍 **Phase 0 smoke test:** `--auto` combined with deny rules on free models.
+- Possible builder engine or orchestrator from the spikes in [Open-source candidates](#open-source-candidates).
 - Skills are confirmed: opencode loads `SKILL.md` from `.opencode/skills`, `.claude/skills` and `.agents/skills`, through a `skill` tool, with per-agent permissions (4c).
 
 ### 16. Product north star
@@ -402,12 +407,82 @@ All through GitHub:
 8. **Deploy**: run `vinyl-deploy` (verify attestation, backup, swap, health check, smoke test and prod scenarios, auto-rollback).
 9. **Report**: issue comment, daily digest, and Telegram for urgent events.
 
+## Open-source candidates
+Investigated 2026-10-29. Bar: maintained, several active contributors, hundreds of stars or more, works with opencode. "Match" is a rough estimate of how much of this spec a project covers.
+
+### Finding
+- No project covers the whole spec. The best reach about 35–40%.
+- No candidate covers the GitHub-side half of the spec: risk tiers (1a), holdouts (4), one App per role (6), branch protection, attested deploy and rollback, error budget (9a), kill switch (12), provenance (21). We build that half whatever we choose.
+- Why nothing exists yet:
+  - the category is young; most factory repos are under a year old and have one or two maintainers
+  - most factories are built on Claude Code or Codex; opencode is usually one backend option
+  - open-source tools stop at an open PR or a merge with CI; merge and deploy depend on each repo's setup
+  - opencode already ships the building blocks, so people write a little glue instead of a framework
+
+### Main path: our own orchestration on opencode building blocks
+- opencode supplies the agent:
+  - GitHub action: `issues`, `pull_request`, `schedule` and `workflow_dispatch` events; `agent`, `model` and `prompt` inputs; `use_github_token` takes a role's App token (6)
+  - `opencode run`: `--agent`, `--model`, `--format json` (raw events for telemetry, 14), `--auto` (headless without `ask`, 4c), `--session` and `--fork` (resume retries, 9; prototypes, 3)
+  - workflow-injected config: `OPENCODE_CONFIG_CONTENT`, `OPENCODE_PERMISSION`, `OPENCODE_DISABLE_PROJECT_CONFIG` (10a)
+  - `opencode serve` plus SDK v2 structured output (`json_schema`): validated JSON from the judge (3), reviewer (4a) and triage (2)
+  - `opencode stats` and `opencode export --sanitize`: token use per session and transcripts for the holdout-isolation scan (4, 14)
+- Open-source parts:
+  - router (8c): LiteLLM proxy with Redis; alternative freellmapi (free-tier aware, but "personal experimentation only" and local SQLite state)
+  - telemetry (14): Langfuse through LiteLLM's integration; alternative Arize Phoenix
+  - satisfaction judging and replay evals (4, 10b): promptfoo; alternative DeepEval
+  - tier classifier, test-integrity guard and PR template check (1a, 4, 4b): one Danger.js Dangerfile
+  - YouTube twin (4): WireMock record and playback
+  - already in the spec: zizmor, Harden-Runner, Litestream
+  - optional reviewer step (4a): pullfrog (Actions bot, verdict as a required check); PR part only
+- We write: picking the next issue, chaining roles, attempt counts, prototypes, the merger and `tier-gate`, the scenarios repo, `vinyl-deploy`, the kill switch and the digest.
+
+### Candidates for parts of the pipeline
+| Candidate | What it is | Match | Active people | Missing: work around or build |
+|---|---|---|---|---|
+| Agent-Field/SWE-AF | Builder fleet: planner, coder, QA, reviewer, verifier, PR agent; opencode runtime; a model per role; CI fix loop that may not weaken tests | ~35% | 10 | Build: issue intake through `implement_issue`. Measure: requests per issue (79 agent runs for one example feature). Host: AgentField control plane on a 24/7 box |
+| marcusquinn/aidevops | opencode plugin; Pulse supervisor sends headless workers onto `auto-dispatch` issues and merges with exact-head evidence | ~35–40% | 3 | Work around: opinionated "whole company" setup; 24/7 box. Build: GitHub side, model-family separation, holdouts |
+| Maestro Cue | Event pipelines: GitHub issue, label and PR triggers, agent chaining, fan-out and fan-in, a model per step, shell steps | ~30% | 9 | Work around: no comment triggers (use labels); hot-reloading `.maestro/cue.yaml` in the repo; headless mode is pre-release, so the desktop app runs on a 24/7 VM. Build: state per issue, a token per role |
+| jonwiggins/optio | Self-hosted orchestrator: GitHub triggers, worktree → PR, follows CI and review, optional auto-merge | ~30% | 5, one dominant | Work around: needs Kubernetes, PostgreSQL and Redis |
+| OrchestratorInc/agent-orchestrator | Desktop daemon: task → workers → PR; CI failures and review comments go back to the worker | ~25% | 13 | Work around: desktop on 24/7, no issue intake |
+| fabro-sh/fabro | Workflow engine: graph of steps, a model per step with fallbacks, verification fix loops | ~25% | 4 | Verify opencode support. Build: issue intake, PRs |
+| doordash-oss/agentic-orchestrator | Headless server with REST API: plan critics, implement, Final Review with verification evidence, PR; config outside the repo | ~25% | 1 | Build: issue intake. Verify: Final Review without Codex; requests per issue |
+| multica-ai/multica | Self-hosted board plus daemon; issue → PR; scheduled autopilots | ~20% | 23 | Work around: built for teams, human merges, unclear licence |
+| cyrusagents/cyrus | Background worker: assigned issue → worktree → PR, with our own GitHub App | ~15% | 10 | Builder worker only |
+
+### Spikes before building the orchestration
+1–2 days each, on a throwaway repo:
+- **Builder engine:** SWE-AF with `implement_issue` only, opencode on OpenRouter free models. Second choice: agentic-orchestrator, Medium profile.
+- **Orchestrator:** aidevops Pulse or Maestro Cue.
+- A candidate passes only if:
+  - each role can use its own token
+  - an agent editing the candidate's config can't change the pipeline or its own permissions
+  - requests per issue fit the free-tier budget (8c)
+- Otherwise the main path builds that part.
+
+### Rejected
+- Archon, Symphony, Gas Town, Open SWE, no_human: no opencode support (Open SWE also runs on LangChain's hosted platform).
+- forgeo: commits straight to `main`, no gates, one maintainer.
+- oh-my-symphony: one maintainer, auto-merge bypasses PRs.
+- OpenCastle: a config compiler, not an orchestrator.
+- oh-my-opencode (now oh-my-openagent): one maintainer, no longer on opencode. oh-my-opencode-slim: an in-session plugin; its reviews are not independent gates.
+- Loki Mode, Foreman, CodeAF, Paseo, Paradev, vibe-kanban: interactive tools, one maintainer, or no GitHub pipeline.
+
+### Ideas to borrow
+- no_human: tamper guard (deleted tests, new skips, tautological assertions) and reproduction gate. Self-reported: the gate sent back 505 of 1,709 "done" attempts.
+- Loki Mode: contract-first checks, signed verification receipts.
+- Fabro: a model per step with fallback chains.
+- Gas Town: bisecting merge queue (8b), health monitor for stuck workers (9), work state that survives crashes.
+- forgeo: task state with dependencies, `BLOCKED` and retry policy; questions to the owner in a `BLOCKER.md`.
+- oh-my-symphony: a `verify:` command per lane, run leases in SQLite.
+- Open SWE: rerun a flaky CI job only with evidence; review that learns from past feedback; approval for pushes that touch workflow files.
+- Archon: its sdlc workflows (intake, build queue, merge queue, discoveries) as a reference design.
+
 ## Follow-up sessions and investigations
 - 🔍 Requirements: define them properly and close the gaps they leave in other areas (16).
-- 🔍 Telemetry store: standalone grilling session; prefer an existing solution (14).
-- 🔍 Provider router and fallback: reuse an existing solution (8c).
+- 🔍 Telemetry store: standalone grilling session; candidates found (14).
+- 🔍 Provider router and fallback: candidates found (8c).
 - 🔍 Quota sharing with the tagging pipeline (19).
-- 🔍 Capabilities of the opencode GitHub integration (15).
+- 🔍 Spikes: builder engine and orchestrator (see [Open-source candidates](#open-source-candidates)).
 - 📈 Re-tune the worker time cap, parallelism cap, satisfaction threshold and N from telemetry (4, 8a, 9).
 
 ## References
@@ -438,3 +513,9 @@ All through GitHub:
 - Litestream: https://litestream.io/how-it-works/
 - Anthropic, Building verification loops in Claude Code with skills (embedded and chained checks, encoding repeated corrections): https://claude.com/resources/articles/building-verification-loops-in-claude-code-with-skills
 - opencode Agent Skills (locations, `skill` tool, per-agent permissions): https://opencode.ai/docs/skills/
+- opencode GitHub, CLI, server and SDK docs: https://opencode.ai/docs/github/, https://opencode.ai/docs/cli/, https://opencode.ai/docs/server/, https://opencode.ai/docs/sdk/
+- awesome-software-factories: https://github.com/varun1505/awesome-software-factories
+- ROBOCO, software factory practices from 12 open-source repos: https://roboco.io/en/posts/software-factory-best-practices-from-open-source/
+- Candidates: https://github.com/Agent-Field/SWE-AF, https://github.com/marcusquinn/aidevops, https://github.com/RunMaestro/Maestro, https://github.com/jonwiggins/optio, https://github.com/OrchestratorInc/agent-orchestrator, https://github.com/fabro-sh/fabro, https://github.com/doordash-oss/agentic-orchestrator, https://github.com/multica-ai/multica, https://github.com/cyrusagents/cyrus, https://github.com/pullfrog/pullfrog
+- Parts: https://github.com/BerriAI/litellm, https://github.com/tashfeenahmed/freellmapi, https://github.com/langfuse/langfuse, https://github.com/promptfoo/promptfoo, https://github.com/danger/danger-js, https://github.com/wiremock/wiremock
+- Ideas: https://github.com/no-human-ai/no_human, https://github.com/asklokesh/loki-mode, https://github.com/gastownhall/gastown, https://github.com/coleam00/Archon, https://github.com/langchain-ai/open-swe
