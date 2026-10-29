@@ -6,10 +6,14 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 
 ### 1. Trust boundary: full dark, reached in phases
 - End state: the agent merges and deploys to prod with no human gate.
-- **Phase 0, shadow mode:** the factory runs the whole pipeline but stops at an open PR; the owner merges. It covers the first 2 issues (about 2 PRs); the owner reviews each and records whether they agree with the judge and reviewer.
-- **Phase 1, full dark:** auto-merge turns on once the owner is satisfied with both PRs, for low- and medium-risk changes (1a).
-  - Accepted risk: 2 PRs say little about judge and reviewer accuracy. The error budget (9a) and kill switch (12) are the safety net.
-  - Demotion: when the error budget is spent, the factory drops back to phase 0 until the owner turns auto-merge on again.
+- **Phase 0, shadow mode:** the factory runs the whole pipeline but stops at an open PR; the owner merges. It runs for at least 20 PRs in total; the owner reviews each and records whether they agree with the judge and reviewer.
+  - Why 20: with 0 disagreements in n PRs, the 95% upper bound on the true disagreement rate is about 3/n (rule of three). 2 PRs bound it at 78%, 10 at 26%, 20 at about 14%.
+- **Phase 1, full dark:** auto-merge turns on **per tier** (1a), low first, then medium. A tier is promoted when:
+  - at least 10 shadow PRs of that tier
+  - owner agreement with judge and reviewer ≥ 90%
+  - 0 Important findings the gates missed (the owner found them, not the reviewer)
+- **Sampling after promotion:** the owner reads 1 in 5 auto-merged PRs of a newly promoted tier until 20 have been read. Disagreements become replay eval cases (10b).
+- **Demotion:** a tier drops back to shadow mode when its revert rate exceeds 10% over its last 10 merges, or for all tiers when the error budget is spent (9a). Only the owner promotes again.
 - Guardrails:
   - SQLite backup before every deploy.
   - Health check after deploy; on failure, revert the merge commit automatically.
@@ -24,20 +28,29 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - **High:** schema migrations, ingest and YouTube quota use, auth, deploy-related code. The owner approves; an agent approval never counts as the owner's.
 - Off-limits paths (10a) are never merged by the factory, whatever the tier.
 - The classifier rules and path lists are off-limits (10a).
+- **Enforcement (personal repo, no org features):**
+  - GitHub App approvals count toward required reviews, and push restrictions are org-only, so tiers are not enforced by required approvals.
+  - Instead, a required check `tier-gate`, pinned to the merger App, carries the tier decision. It goes green for promoted tiers (1). For high tier, a `pull_request_review` workflow sets it green only when the reviewer is the owner and the approval is on the current head SHA; a new commit resets it.
+  - "Require branches to be up to date before merging" is on, so every merge has run CI on the latest `main`.
 
 ### 2. Readiness: agent triage
 - The agent reads all open issues and scores them against a spec template (goal, acceptance criteria, out of scope, UI notes).
 - If criteria are inferable, the agent writes them into the issue, labels it `ready-for-agent`, and proceeds.
+  - In phase 0, and always for high tier, inferred criteria wait for the owner's 👍 reaction before building starts.
+  - Every failed attempt is labeled `spec-defect` (the criteria were wrong) or `impl-defect` (the build was wrong) in telemetry (14).
 - **Frozen target:** acceptance criteria and holdout scenarios are fixed before building starts. Their hash goes into the PR; changing either one counts as a new attempt.
 - If criteria are ambiguous, the agent may build several prototypes and pick one.
 - `needs-info` plus questions only for product decisions that belong to the human.
 - The agent may create its own issues (bugs, refactors, follow-ups).
   - Label `agent-created`; max 3 open at once, max 3 created per day.
+  - Depth limit 1: work on an agent-created issue can't create another agent-created issue.
+  - Overflow: when a cap is full, the item goes into the digest (7) instead of being dropped.
+  - Each body ends with a `source:` block (review finding, telemetry, seed data). Text quoted from third-party content stays marked as data, so it doesn't become trusted just because the agent is an allowlisted author (6).
   - Agent-created issues can't be `factory-change` issues or touch off-limits paths (10a).
   - Human-written issues take priority.
 
 ### 3. Prototype selection: fresh-context judge with screenshots
-- 2–3 prototypes maximum per ambiguous issue.
+- 2–3 prototypes maximum per ambiguous issue, only if the remaining daily request budget (8c) covers them; otherwise one.
 - The judge runs on a **different model family** than the builder, with a clean context and no access to the builder's reasoning. LLM judges favor output from their own family.
 - The judge scores code plus Playwright screenshots against a rubric:
   - spec fit
@@ -63,10 +76,18 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - The satisfaction gate runs in the scenarios repo's own Actions, triggered by `repository_dispatch` with the PR head SHA. Its logs stay private; it reports only the score and pass/fail as a check on the public PR.
   - Builder instructions: treat the acceptance criteria as the only target.
   - The reviewer flags any builder transcript that references the scenarios repo; a hit fails the attempt.
-  - Constraint: GitHub Free caps Actions minutes for private repos; satisfaction runs count against it and telemetry (14) tracks usage.
-- **Satisfaction instead of pass/fail:** the judge runs each scenario N times (start with 3) and reports the share of runs that satisfy the user. Merge needs satisfaction ≥ threshold (start at 0.9). All existing scenarios must stay passing.
+  - Constraint: GitHub Free includes 2000 Actions minutes per month for private repos, each job rounded up to a full minute. See the minutes budget (8e).
+- **Hard checks vs satisfaction:**
+  - Hard requirements are deterministic Playwright assertions: one run, one retry for flakes.
+  - LLM-judged satisfaction is only for subjective outcomes. Each such scenario runs N times (start with 3).
+  - Satisfaction is the share of satisfying trajectories across all judged runs, not per scenario. Merge needs satisfaction ≥ 0.9 over at least 10 trajectories, and no scenario at 0/N.
+  - Why: per scenario, N=3 can only score 0, 0.33, 0.67 or 1, so a 0.9 threshold would mean 3/3. LLM judges flip on identical input often enough that 3/3 would fail good PRs.
+- **Existing scenarios:** must stay passing. A hard check that fails, then passes on its retry, counts as passing and is logged as flaky; a scenario flaky 3 times becomes a `ready-for-human` issue.
 - **YouTube twin:** CI runs against a fake YouTube Data API server built from recorded responses, including quota errors and 403s, so ingest features can be validated without the real API.
-- After deploy: smoke test on prod plus a read-only subset of the holdout scenarios. Failure triggers auto-revert. The same subset runs hourly as synthetic monitoring.
+- After deploy: smoke test on prod plus a read-only subset of the holdout scenarios. Failure triggers auto-revert.
+- Synthetic monitoring:
+  - hourly smoke test from the public repo (free minutes); it is the SLO probe (9a)
+  - the holdout subset runs once a day from the scenarios repo (private minutes)
 
 #### 4a. Code review
 - **Self-review before the PR:** after tests, build and lint pass, the builder runs a fresh-context subagent on its own diff and fixes what it finds.
@@ -89,6 +110,16 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - the evidence rule
 - **Fix at the source:** when the reviewer flags the same class of bug repeatedly, the factory adds a lint rule or updates `AGENTS.md`. Changes to `REVIEW.md` go through a `ready-for-human` issue.
 
+#### 4b. PR template
+- `.github/pull_request_template.md` (off-limits, 10a) with these sections:
+  - **Issue:** `Closes #`
+  - **What changed**
+  - **Testing:** commands run, e2e and scenario results, screenshots
+  - **Risk:** tier (1a) and why
+  - **How to revert:** `git revert <sha>`, plus migration notes if any
+  - **Provenance:** criteria hash, model ID per role, satisfaction, review rounds
+- A CI check fails the PR if any section is empty.
+
 ### 5. Environments: prod only
 - No staging. E2E runs in CI against a local server; deploy goes straight to the droplet, then smoke test, auto-revert on failure.
 
@@ -97,7 +128,7 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 - The SSH key lives only in a `production` GitHub environment restricted to `main`. The deploy job runs no agent-editable script before it uses the key.
 - The droplet gets a dedicated non-root `deploy` user. Its SSH key has a forced command that runs only `vinyl-deploy`:
   - verify the binary's build attestation
-  - back up SQLite
+  - back up SQLite (11)
   - swap the binary
   - restart the service
   - health check
@@ -108,20 +139,29 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - builder: contents, pull requests (branch protection keeps it off `main`); not installed on the scenarios repo
   - scenario agent: contents on the scenarios repo only
   - scenario runner: read on the scenarios repo, checks on this repo
-  - merger workflow: merges after required checks pass; the builder never merges its own PR
+  - merger workflow: merges after required checks pass, posts `tier-gate` (1a); the builder never merges its own PR
   - none get admin, workflow-edit, or variables rights, so agents can't rewrite their own guardrails or the kill switch.
+- **Merge audit:** the builder needs `contents: write` to push branches, so it could technically merge. A workflow on push to `main` checks that the merge was done by the merger App; otherwise it reverts, sends a Telegram alert, and the watchdog turns the factory off (12).
 - Branch protection on `main`:
-  - required checks: CI, test-integrity guard, satisfaction gate, reviewer
+  - required checks: CI, test-integrity guard, PR template check, satisfaction gate, reviewer, `tier-gate`
   - each required check is pinned to its expected source app, so other workflows can't spoof it
+  - "Require branches to be up to date before merging" on
   - "Do not allow bypassing the above settings" on
+- Repo setting "Allow GitHub Actions to create and approve pull requests" is off.
 - Free-model API keys live in repo secrets, one per provider, and stay out of the agent's shell environment (requests go through the router).
 - Provider allowlist in the router: only providers with known data policies; opt out of training where offered. Never put secrets in model context. Log the exact model ID per run.
   - Accepted: some free tiers use prompts for training and human review with no opt-out (e.g. the unpaid Gemini API). The repo is public and secrets never enter model context, so this is allowed; the allowlist records each provider's policy.
 - Untrusted input:
   - The repo stays public, with an author allowlist: the agent acts only on issues by the owner or by itself; anything else gets `needs-triage` and is ignored.
   - Prompts mark third-party text (YouTube titles and descriptions in the seed, dependency docs, web pages) as data, never instructions.
-  - Runner egress is allowlisted to the providers, GitHub, and package registries.
+  - Runner egress is allowlisted to the providers, GitHub, and package registries with StepSecurity Harden-Runner in block mode (free for public repos).
+    - Accepted: Harden-Runner needs a paid license for private repos, so the scenarios repo has no egress block. It holds only a judge provider key and check-write rights.
+- **Workflow injection** (PromptPwnd):
+  - never interpolate `${{ github.event.* }}` inside `run:`; pass it through `env:`
+  - no `pull_request_target` workflow checks out PR code
+  - `zizmor` runs in CI on all workflow files
 - Accepted: Actions logs are public. A log scan fails the run if a secret pattern appears.
+- **Cost:** all factory work runs in the public repo, where Actions minutes are free. Only the satisfaction gate and the daily holdout run use private minutes (8e). The Actions spending limit stays at $0, so GitHub blocks runs at the quota instead of billing.
 
 ### 7. Reporting
 - Per issue, on close, the agent comments with:
@@ -141,6 +181,7 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - repeated failures on one issue
   - all providers exhausted
   - error budget spent
+  - merge not done by the merger App (6)
 - Push channel: Telegram bot (token and chat ID in repo secrets).
 - Digest: daily, only on days with activity.
 
@@ -162,6 +203,7 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 
 #### 8c. Provider routing
 - Models: a mix of free models from several providers, configured as opencode providers.
+- Buy $10 of OpenRouter credits once: it lifts the `:free` daily cap from 50 to 1000 requests. At 50/day the factory can't finish one issue a day.
 - A router config lists providers and models by priority and role (builder, judge, reviewer, scenario, triage).
 - **Capacity:** free tiers cap requests per minute and per day (e.g. OpenRouter `:free`: 20/min, and 50/day with under $10 of purchased credits). One agent run takes dozens to hundreds of requests, so budgets count requests as well as tokens.
   - Phase 0 measures requests per issue per role.
@@ -171,7 +213,7 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 - A new model ID for any role is scored against the replay eval set (10b) before it takes real work.
 - On 429 or quota exhaustion, the worker switches to the next provider and records the reset time.
 - Token budgets per issue and per day, per role. Hitting the issue budget counts as a failed attempt; the daily budget reserves a share for tagging (19).
-- Quota state is kept in JSON on a `factory-state` branch; writes go through a `factory-state` concurrency group.
+- Quota state is kept in JSON on a `factory-state` branch. Only a state workflow writes it, through a `factory-state` concurrency group; workers send it events and never push to the branch.
 - When all providers are exhausted, the factory sleeps until the earliest reset; this is reported in the digest, not as an alert.
 - Alert only if all providers stay exhausted for more than 24h.
 - 🔍 **Investigate:** reuse an existing router or fallback solution before building one (opencode provider config, OpenRouter auto-routing, LiteLLM, free-model aggregators).
@@ -181,11 +223,24 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 - Backup cron at most hourly.
 - Agent-created issues must use the GitHub App token, because `GITHUB_TOKEN` events don't trigger workflows.
 
+#### 8e. Private Actions minutes budget
+- 2000 minutes per month on the scenarios repo. Rough use:
+  - satisfaction gate: about 2 runs × 5 min per issue
+  - holdout subset after each deploy: about 3 min
+  - daily holdout run: about 90 min per month
+  - that leaves room for about 140 issues per month
+- Go and Playwright browsers are cached to cut setup time.
+- Usage is tracked in `factory-state` and reported in the digest.
+- Above 80% used: drop the daily holdout run, then cut N (4) to 1.
+- At the cap, the satisfaction gate stays pending and nothing merges until the monthly reset.
+- No self-hosted runner on the droplet: it would run builder-written code on the prod box.
+
 ### 9. Stop rules
 - Max 3 attempts per issue, counted across runs.
+  - Infra failures don't count: 429s, provider outages, runner timeouts before the agent starts. They retry after the provider's reset time.
 - Worker job cap: 1h initially.
   - 📈 Re-tune from telemetry (actual run durations) once several issues have shipped.
-- Each worker writes a progress file for its issue on the branch; a retry resumes from it instead of starting cold.
+- Each worker writes a progress file for its issue on the branch; a retry resumes from it instead of starting cold. The file records the criteria hash (2); a retry ignores a file whose hash doesn't match the frozen one.
 - After the 3rd failure:
   - label `needs-human`
   - post a failure summary
@@ -193,9 +248,13 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - move on to the next issue
 
 #### 9a. SLO and error budget
-- SLO: site availability plus holdout satisfaction on prod (4), measured over 4 weeks.
+- SLO, measured over a rolling 4 weeks:
+  - availability ≥ 99% on the hourly smoke probe (4), so about 6 failed probes out of 672
+  - holdout satisfaction on prod ≥ 0.9
 - Budget spent: the factory stops feature work and only takes fixes until the budget recovers, and sends an alert.
+- An incident that uses more than 20% of the budget needs a postmortem in its `factory-change` PR or issue, and becomes a replay eval case (10b).
 - Hard backstop: 2 rollbacks within 24h trip the kill switch (12).
+- **Revert fast path:** after a failed health check, `vinyl-deploy` has already swapped the binary back, so prod recovers first. The merger App then opens the revert PR as an exact `git revert <sha>`. The reviewer, satisfaction and `tier-gate` Apps recognize it and pass right away; CI still runs.
 
 ### 10. Self-modification
 - The main agent may change the factory: builder and triage prompts, router, guidelines other than the rubric (guardrail scope: see 10a).
@@ -215,6 +274,7 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - the risk-tier classifier and its path lists (1a)
   - the replay eval set (10b)
   - the rubric (`docs/design-guidelines.md`) and the satisfaction threshold
+  - the PR template (4b)
   - SLO and error budget policy
   - branch protection and required-check sources
   - the kill-switch check and watchdog
@@ -224,14 +284,17 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 
 #### 10b. Replay eval set
 - Incidents become evals: every rollback, reopened issue and `needs-human` failure adds a case, confirmed by the owner.
-- Seeded from the phase 0 issues; grows with every incident.
+- Seeded from the phase 0 issues; grows with every incident and every owner disagreement during sampling (1).
 - Scores every `factory-change` PR (10) and every new model ID (8c). The eval runs in a workflow, so agents can't edit results.
+- Also runs weekly in the public repo, because free models can change behind the same ID. A score drop demotes that model ID in the router.
 
 ### 11. DB migrations and rollback
 - Migrations are forward-only and additive. Drops and renames happen in a later deploy, once nothing uses the column.
 - Rollback swaps the binary back and keeps the current DB.
-- Backups are copied off the droplet, with a retention window (start with 14 days).
-- A weekly CI job restores the latest backup and runs the smoke test against it.
+- Backups:
+  - **Before each deploy:** `sqlite3 app.db ".backup /var/backups/pre-<sha>.db"`. This uses SQLite's Online Backup API, which gives a consistent snapshot of a live database; a plain file copy can be corrupt or miss WAL data.
+  - **Off-site, continuous:** Litestream streams the WAL to a free-tier S3-compatible bucket (Cloudflare R2 or Backblaze B2, about 10 GB free). Daily snapshots, retention `336h` (14 days).
+- A weekly CI job runs `litestream restore` and runs the smoke test against the restored DB.
 - Restoring a backup in prod is a manual last resort, prompted by a Telegram alert.
 
 ### 12. Kill switch
@@ -256,6 +319,9 @@ All through GitHub:
   - owner/judge agreement (1)
   - review rounds per attempt (4a)
   - reviewer false-alarm rate: the reviewer is rerun on merged PRs that were never reverted, and every finding there counts as a false alarm
+  - escape rate per gate: the share of changes that passed the gate and were later reverted or reopened; the leakiest gate gets fixed first
+  - `spec-defect` vs `impl-defect` share of failures (2)
+  - private Actions minutes used (8e)
 - The log is append-only and written by a workflow, not by agents, so agents can't edit their own history.
 - 🔍 **Investigate in a standalone grilling session** which store to use, and prefer an existing solution (e.g. opencode's built-in stats, Langfuse, OpenTelemetry-based LLM tracing).
 
@@ -295,6 +361,13 @@ All through GitHub:
 - New Go modules, npm packages or GitHub Actions need a `ready-for-human` issue; the agent can't add them itself.
 - Actions pinned to full commit SHAs.
 - `govulncheck` in CI; Dependabot on.
+- Dependabot PRs:
+  - patch and minor updates of existing deps, and Actions SHA bumps: low tier, auto-merged once checks are green
+  - major updates: `ready-for-human`
+
+### 21. Provenance
+- The merger adds commit trailers to every factory merge: `Factory-Issue`, `Criteria-Hash`, `Tier`, `Models` (one ID per role), `Satisfaction`.
+- Together with the build attestation (6), any merge can be traced back to its spec, models and gate results from git alone.
 
 ## Pipeline (per issue)
 1. **Triage**: check the issue's clarity, predict which files it touches, label it, and fill in acceptance criteria.
@@ -302,8 +375,8 @@ All through GitHub:
 3. **Builder**: implement on a branch, with no access to the scenarios repo. For UI ambiguity, build 2–3 prototypes. Self-review in a fresh context before opening the PR (4a).
 4. **Judge**: fresh context, different model family; pick a prototype using code, screenshots and the rubric.
 5. **Reviewer**: fresh context, different model family; bug hunter plus verifier check spec fit, bugs, test quality and holdout isolation. At most 3 review-and-fix rounds (4a).
-6. **Satisfaction gate**: in the scenarios repo, run the scenarios N times; merge needs satisfaction ≥ threshold.
-7. **Merge** (phase 1 only; phase 0 stops at an open PR): classify the risk tier (1a); low and medium auto-merge, high waits for the owner. Rebase, required checks green, serialized merge by the merger workflow.
+6. **Satisfaction gate**: in the scenarios repo, run hard checks once and judged scenarios N times; merge needs all hard checks green and satisfaction ≥ threshold (4).
+7. **Merge** (promoted tiers only; others stop at an open PR): classify the risk tier (1a) and post `tier-gate`; high waits for the owner's approval on the head SHA. Rebase, required checks green, serialized merge by the merger workflow with provenance trailers (21).
 8. **Deploy**: run `vinyl-deploy` (verify attestation, backup, swap, health check, smoke test and prod scenarios, auto-rollback).
 9. **Report**: issue comment, daily digest, and Telegram for urgent events.
 
@@ -331,3 +404,13 @@ All through GitHub:
 - OpenRouter free-model rate limits: https://openrouter.ai/docs/api/reference/limits
 - Gemini API terms (unpaid services): https://ai.google.dev/gemini-api/terms
 - Anthropic, Effective harnesses for long-running agents (don't remove or edit tests): https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
+- Augment, Dark factory (escape rate per gate, provenance, reviewing agent merges): https://www.augmentcode.com/guides/dark-factory-autonomous-software-delivery
+- Rule of three (zero-failure upper bound ≈ 3/n): https://jmgamble.substack.com/p/the-rule-of-3-in-critical-appraisal
+- τ-bench (pass^k): https://arxiv.org/abs/2406.12045
+- LLM-as-a-judge verdict flips on repeated runs: https://arxiv.org/abs/2512.16041
+- GitHub Actions billing (per-job rounding, $0 spending limit, public repos free): https://docs.github.com/billing/managing-billing-for-your-products/managing-billing-for-github-actions
+- GitHub branch protection rules (push restrictions org-only): https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/managing-a-branch-protection-rule
+- GitHub App reviews count toward required approvals: https://github.com/orgs/community/discussions/181487
+- StepSecurity Harden-Runner: https://docs.stepsecurity.io/harden-runner/enable-runtime-security/github-hosted-runners
+- SQLite Online Backup API: https://www.sqlite.org/backup.html
+- Litestream: https://litestream.io/how-it-works/
