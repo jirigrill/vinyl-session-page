@@ -6,13 +6,24 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 
 ### 1. Trust boundary: full dark, reached in phases
 - End state: the agent merges and deploys to prod with no human gate.
-- **Phase 0, shadow mode:** the factory runs the whole pipeline but stops at an open PR; the owner merges. For the first N issues (start with 10), record whether the owner agrees with the judge and reviewer.
-- **Phase 1, full dark:** auto-merge turns on once owner/judge agreement and the telemetry (14) look acceptable.
+- **Phase 0, shadow mode:** the factory runs the whole pipeline but stops at an open PR; the owner merges. It covers the first 2 issues (about 2 PRs); the owner reviews each and records whether they agree with the judge and reviewer.
+- **Phase 1, full dark:** auto-merge turns on once the owner is satisfied with both PRs, for low- and medium-risk changes (1a).
+  - Accepted risk: 2 PRs say little about judge and reviewer accuracy. The error budget (9a) and kill switch (12) are the safety net.
+  - Demotion: when the error budget is spent, the factory drops back to phase 0 until the owner turns auto-merge on again.
 - Guardrails:
   - SQLite backup before every deploy.
   - Health check after deploy; on failure, revert the merge commit automatically.
   - Kill switch (12) pauses the factory.
 - Going sideways for a while is acceptable.
+
+#### 1a. Risk tiers
+- The tier is set by a classifier from the change (paths touched, diff content), not by the author or the agent's own claim.
+- Tiers:
+  - **Low:** docs, CSS, copy, additive UI. Auto-merge once all checks are green.
+  - **Medium:** ordinary features. Auto-merge in phase 1.
+  - **High:** schema migrations, ingest and YouTube quota use, auth, deploy-related code. The owner approves; an agent approval never counts as the owner's.
+- Off-limits paths (10a) are never merged by the factory, whatever the tier.
+- The classifier rules and path lists are off-limits (10a).
 
 ### 2. Readiness: agent triage
 - The agent reads all open issues and scores them against a spec template (goal, acceptance criteria, out of scope, UI notes).
@@ -38,23 +49,45 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 
 ### 4. Verification: unit + e2e + holdout scenarios
 - Pre-merge gate: `go vet`, unit tests, and Playwright e2e against a local server running on a DB snapshot.
-- Unit tests only for real edge cases:
+- **Testing focus:** holdout scenarios and Playwright e2e are the main safety net. Unit tests only for real edge cases:
   - no tautology tests
   - no "just-in-case" tests
   - the reviewer rejects tests that don't guard real behavior
-- Holdout scenarios in `scenarios/`:
+- **Test integrity:** a CI guard fails any builder PR that deletes an e2e test or adds `test.skip`, `test.fixme` or `test.only`, unless the acceptance criteria remove that behavior. The reviewer checks for weakened assertions.
+- Holdout scenarios in a private repo, `vinyl-session-page-scenarios`:
   - user-journey tests written by a separate scenario agent from the issue text, before building starts
   - the scenario agent runs on a different model family than the builder
   - **red first:** a new scenario must fail on current `main`; a scenario that passes immediately is rejected
-  - the builder can't edit them; a CI check fails any builder PR that touches `scenarios/`
-- **Holdout isolation (no separate repo):**
-  - Builder instructions: never read, list, grep, or open anything under `scenarios/`; never infer scenario content from CI logs; treat the acceptance criteria as the only target.
-  - Defense in depth: the builder job checks out the repo with sparse checkout that excludes `scenarios/`, and opencode's permission config denies the path where supported.
-  - The reviewer flags any builder transcript that references `scenarios/`; a hit fails the attempt.
-  - Accepted risk: the repo is public, so the isolation is behavioral, not absolute.
+- **Holdout isolation (private repo):**
+  - Only the scenario agent's app (write) and the scenario runner's app (read) are installed on the scenarios repo. The builder's app is not, so it can neither read nor edit scenarios.
+  - The satisfaction gate runs in the scenarios repo's own Actions, triggered by `repository_dispatch` with the PR head SHA. Its logs stay private; it reports only the score and pass/fail as a check on the public PR.
+  - Builder instructions: treat the acceptance criteria as the only target.
+  - The reviewer flags any builder transcript that references the scenarios repo; a hit fails the attempt.
+  - Constraint: GitHub Free caps Actions minutes for private repos; satisfaction runs count against it and telemetry (14) tracks usage.
 - **Satisfaction instead of pass/fail:** the judge runs each scenario N times (start with 3) and reports the share of runs that satisfy the user. Merge needs satisfaction ≥ threshold (start at 0.9). All existing scenarios must stay passing.
 - **YouTube twin:** CI runs against a fake YouTube Data API server built from recorded responses, including quota errors and 403s, so ingest features can be validated without the real API.
 - After deploy: smoke test on prod plus a read-only subset of the holdout scenarios. Failure triggers auto-revert. The same subset runs hourly as synthetic monitoring.
+
+#### 4a. Code review
+- **Self-review before the PR:** after tests, build and lint pass, the builder runs a fresh-context subagent on its own diff and fixes what it finds.
+- **Reviewer = hunter + verifier:**
+  - a bug hunter reads the diff against the whole repo and the acceptance criteria
+  - a verifier from a different model family than the hunter confirms each finding; only confirmed findings are posted
+  - findings cover bugs and spec fit only; style, cleanup and diagnostics are dropped
+  - each finding cites a file and line as evidence
+- **Severity:** each finding is tagged:
+  - **Important:** blocks the merge until fixed or resolved with a reason
+  - **Pre-existing:** a bug the PR didn't introduce; becomes an `agent-created` issue (within the cap in 2) and doesn't block
+  - nits are not posted
+- **Convergence:**
+  - at most 3 review-and-fix rounds per attempt; the 4th counts as a failed attempt (9)
+  - after the first round, only the new diff is re-reviewed
+  - a posted finding is never repeated; findings name the class of bug, not only one line
+- **`REVIEW.md`** is the reviewer's repo guide (off-limits, 10a):
+  - what failure looks like here
+  - paths to skip
+  - the evidence rule
+- **Fix at the source:** when the reviewer flags the same class of bug repeatedly, the factory adds a lint rule or updates `AGENTS.md`. Changes to `REVIEW.md` go through a `ready-for-human` issue.
 
 ### 5. Environments: prod only
 - No staging. E2E runs in CI against a local server; deploy goes straight to the droplet, then smoke test, auto-revert on failure.
@@ -72,15 +105,18 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 - CI attests the built binary (GitHub artifact attestations); `vinyl-deploy` refuses unattested binaries.
 - Agent identity: **GitHub Apps only** (short-lived installation tokens), one per role:
   - triage: issues
-  - builder: contents, pull requests (branch protection keeps it off `main`)
+  - builder: contents, pull requests (branch protection keeps it off `main`); not installed on the scenarios repo
+  - scenario agent: contents on the scenarios repo only
+  - scenario runner: read on the scenarios repo, checks on this repo
   - merger workflow: merges after required checks pass; the builder never merges its own PR
   - none get admin, workflow-edit, or variables rights, so agents can't rewrite their own guardrails or the kill switch.
 - Branch protection on `main`:
-  - required checks: CI, scenario guard, satisfaction gate, reviewer
+  - required checks: CI, test-integrity guard, satisfaction gate, reviewer
   - each required check is pinned to its expected source app, so other workflows can't spoof it
   - "Do not allow bypassing the above settings" on
 - Free-model API keys live in repo secrets, one per provider, and stay out of the agent's shell environment (requests go through the router).
 - Provider allowlist in the router: only providers with known data policies; opt out of training where offered. Never put secrets in model context. Log the exact model ID per run.
+  - Accepted: some free tiers use prompts for training and human review with no opt-out (e.g. the unpaid Gemini API). The repo is public and secrets never enter model context, so this is allowed; the allowlist records each provider's policy.
 - Untrusted input:
   - The repo stays public, with an author allowlist: the agent acts only on issues by the owner or by itself; anything else gets `needs-triage` and is ignored.
   - Prompts mark third-party text (YouTube titles and descriptions in the seed, dependency docs, web pages) as data, never instructions.
@@ -125,8 +161,14 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 - Before merging, the merger rebases onto `main` and reruns CI. A conflict that can't be resolved counts as a failed attempt.
 
 #### 8c. Provider routing
+- Models: a mix of free models from several providers, configured as opencode providers.
 - A router config lists providers and models by priority and role (builder, judge, reviewer, scenario, triage).
-- The router enforces model-family separation: judge, reviewer and scenario agent never share a family with the builder of the same issue.
+- **Capacity:** free tiers cap requests per minute and per day (e.g. OpenRouter `:free`: 20/min, and 50/day with under $10 of purchased credits). One agent run takes dozens to hundreds of requests, so budgets count requests as well as tokens.
+  - Phase 0 measures requests per issue per role.
+  - The digest reports capacity as issues per day.
+  - The parallelism cap (8a) never exceeds what the per-minute limits allow.
+- The router enforces model-family separation: judge, reviewer and scenario agent never share a family with the builder of the same issue, and the review verifier never shares one with the bug hunter (4a).
+- A new model ID for any role is scored against the replay eval set (10b) before it takes real work.
 - On 429 or quota exhaustion, the worker switches to the next provider and records the reset time.
 - Token budgets per issue and per day, per role. Hitting the issue budget counts as a failed attempt; the daily budget reserves a share for tagging (19).
 - Quota state is kept in JSON on a `factory-state` branch; writes go through a `factory-state` concurrency group.
@@ -161,13 +203,17 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - **Documented:** what changes and which files.
   - **Reasoned:** the evidence behind it (telemetry, failures).
   - **Objected:** a separate fresh-context devil's-advocate review argues against it, and both sides are recorded in the PR.
+  - **Scored:** run against the replay eval set (10b); a regression blocks the merge.
   - **Reported specifically:** its own Telegram message plus a dedicated digest section.
 
 #### 10a. Hard guardrails: off-limits
 - The agent cannot change these; it may only propose changes as `ready-for-human` issues:
   - workflow files, and every script, Makefile target or config they execute
-  - the `scenarios/` guard and the holdout-isolation instructions
-  - judge, reviewer and scenario-agent prompts
+  - the scenarios repo, its workflows and app installations
+  - the test-integrity guard and the holdout-isolation instructions
+  - judge, reviewer and scenario-agent prompts, and `REVIEW.md` (4a)
+  - the risk-tier classifier and its path lists (1a)
+  - the replay eval set (10b)
   - the rubric (`docs/design-guidelines.md`) and the satisfaction threshold
   - SLO and error budget policy
   - branch protection and required-check sources
@@ -175,6 +221,11 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - the author allowlist and provider allowlist
   - the droplet deploy script
 - Enforced by CODEOWNERS on these paths plus a CI check that fails any agent PR touching them.
+
+#### 10b. Replay eval set
+- Incidents become evals: every rollback, reopened issue and `needs-human` failure adds a case, confirmed by the owner.
+- Seeded from the phase 0 issues; grows with every incident.
+- Scores every `factory-change` PR (10) and every new model ID (8c). The eval runs in a workflow, so agents can't edit results.
 
 ### 11. DB migrations and rollback
 - Migrations are forward-only and additive. Drops and renames happen in a later deploy, once nothing uses the column.
@@ -199,13 +250,18 @@ All through GitHub:
 ### 14. Telemetry
 - **Prerequisite for phase 0**, not a follow-up.
 - Minimum per run: issue, role, model ID, provider, tokens, tool calls, duration, outcome, judge scores, satisfaction.
-- Derived: change failure rate and failed-deploy recovery time (DORA), owner/judge agreement (1).
+- Per review finding: severity, and how the builder responded (fixed, said wrong, said intentional, didn't matter).
+- Derived:
+  - change failure rate and failed-deploy recovery time (DORA)
+  - owner/judge agreement (1)
+  - review rounds per attempt (4a)
+  - reviewer false-alarm rate: the reviewer is rerun on merged PRs that were never reverted, and every finding there counts as a false alarm
 - The log is append-only and written by a workflow, not by agents, so agents can't edit their own history.
 - 🔍 **Investigate in a standalone grilling session** which store to use, and prefer an existing solution (e.g. opencode's built-in stats, Langfuse, OpenTelemetry-based LLM tracing).
 
 ### 15. Harness
 - Build on the opencode GitHub integration for each agent role, with our own orchestration workflows for triage, fan-out, merge and deploy.
-- 🔍 **Verify first:** headless runs, per-role model selection, custom agents and prompts, per-path read permissions (4). Fallback: the `opencode run` CLI inside Actions jobs.
+- 🔍 **Verify first:** headless runs, per-role model selection, custom agents and prompts. Fallback: the `opencode run` CLI inside Actions jobs.
 
 ### 16. Product north star
 - Working assumption: `REQUIREMENTS.md`.
@@ -242,12 +298,12 @@ All through GitHub:
 
 ## Pipeline (per issue)
 1. **Triage**: check the issue's clarity, predict which files it touches, label it, and fill in acceptance criteria.
-2. **Scenario agent**: write the holdout scenarios from the issue text, prove they fail on `main` (separate PR, auto-merged). Criteria and scenarios are frozen.
-3. **Builder**: implement on a branch, without reading `scenarios/`. For UI ambiguity, build 2–3 prototypes.
+2. **Scenario agent**: write the holdout scenarios from the issue text in the private scenarios repo, prove they fail on `main` (auto-merged there). Criteria and scenarios are frozen.
+3. **Builder**: implement on a branch, with no access to the scenarios repo. For UI ambiguity, build 2–3 prototypes. Self-review in a fresh context before opening the PR (4a).
 4. **Judge**: fresh context, different model family; pick a prototype using code, screenshots and the rubric.
-5. **Reviewer**: fresh context, different model family; check spec fit, coding standards, test quality and holdout isolation.
-6. **Satisfaction gate**: run the scenarios N times; merge needs satisfaction ≥ threshold.
-7. **Merge** (phase 1 only; phase 0 stops at an open PR): rebase, required checks green, serialized merge by the merger workflow.
+5. **Reviewer**: fresh context, different model family; bug hunter plus verifier check spec fit, bugs, test quality and holdout isolation. At most 3 review-and-fix rounds (4a).
+6. **Satisfaction gate**: in the scenarios repo, run the scenarios N times; merge needs satisfaction ≥ threshold.
+7. **Merge** (phase 1 only; phase 0 stops at an open PR): classify the risk tier (1a); low and medium auto-merge, high waits for the owner. Rebase, required checks green, serialized merge by the merger workflow.
 8. **Deploy**: run `vinyl-deploy` (verify attestation, backup, swap, health check, smoke test and prod scenarios, auto-rollback).
 9. **Report**: issue comment, daily digest, and Telegram for urgent events.
 
@@ -256,11 +312,12 @@ All through GitHub:
 - 🔍 Telemetry store: standalone grilling session; prefer an existing solution (14).
 - 🔍 Provider router and fallback: reuse an existing solution (8c).
 - 🔍 Quota sharing with the tagging pipeline (19).
-- 🔍 Capabilities of the opencode GitHub integration, including per-path read permissions (15).
+- 🔍 Capabilities of the opencode GitHub integration (15).
 - 📈 Re-tune the worker time cap, parallelism cap, satisfaction threshold and N from telemetry (4, 8a, 9).
 
 ## References
 - StrongDM Software Factory (holdout scenarios, satisfaction, digital twins): https://factory.strongdm.ai/
+- Anthropic, Solving code review at Anthropic (risk tiers, verified findings, round cap, incidents as evals): https://claude.dev/blog/solving-code-review-at-anthropic/
 - Dan Shapiro, The Five Levels: https://www.danshapiro.com/blog/2026/01/the-five-levels-from-spicy-autocomplete-to-the-software-factory/
 - OWASP Top 10 for Agentic Applications 2026: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026
 - GitHub Actions secure use: https://docs.github.com/en/actions/reference/security/secure-use
@@ -271,3 +328,6 @@ All through GitHub:
 - ImpossibleBench (reward hacking on tests): https://en.papernotes.org/ICLR2026/llm_safety/impossiblebench_measuring_llms_propensity_of_exploiting_test_cases/
 - Google SRE example error budget policy: https://sre.google/workbook/error-budget-policy/
 - OpenRouter data logging and training: https://openrouter.ai/docs/guides/privacy/logging
+- OpenRouter free-model rate limits: https://openrouter.ai/docs/api/reference/limits
+- Gemini API terms (unpaid services): https://ai.google.dev/gemini-api/terms
+- Anthropic, Effective harnesses for long-running agents (don't remove or edit tests): https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
