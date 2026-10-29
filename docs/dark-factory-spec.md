@@ -90,7 +90,7 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - the holdout subset runs once a day from the scenarios repo (private minutes)
 
 #### 4a. Code review
-- **Self-review before the PR:** after tests, build and lint pass, the builder runs a fresh-context subagent on its own diff and fixes what it finds.
+- **Self-review before the PR:** after the builder's verification chain passes (4c), the builder runs a fresh-context subagent on its own diff and fixes what it finds.
 - **Reviewer = hunter + verifier:**
   - a bug hunter reads the diff against the whole repo and the acceptance criteria
   - a verifier from a different model family than the hunter confirms each finding; only confirmed findings are posted
@@ -108,7 +108,11 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - what failure looks like here
   - paths to skip
   - the evidence rule
-- **Fix at the source:** when the reviewer flags the same class of bug repeatedly, the factory adds a lint rule or updates `AGENTS.md`. Changes to `REVIEW.md` go through a `ready-for-human` issue.
+- **Fix at the source:** when the reviewer flags the same class of bug repeatedly, the factory encodes the fix, in this order of preference:
+  1. a lint rule, if the check is deterministic
+  2. a builder verification skill (4c), if a linter can't express it
+  3. an `AGENTS.md` rule, as a last resort
+  - Changes to `REVIEW.md` go through a `ready-for-human` issue.
 
 #### 4b. PR template
 - `.github/pull_request_template.md` (off-limits, 10a) with these sections:
@@ -119,6 +123,22 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - **How to revert:** `git revert <sha>`, plus migration notes if any
   - **Provenance:** criteria hash, model ID per role, satisfaction, review rounds
 - A CI check fails the PR if any section is empty.
+
+#### 4c. Builder verification skills
+- The builder checks its own work before the PR, so failures are caught before they cost review rounds (4a), attempts (9) or private minutes (8e).
+- The checks are opencode skills: `.opencode/skills/<name>/SKILL.md` with frontmatter `name` and `description`.
+- **Chain**, run in this order. The builder prompt names each step; the factory doesn't rely on the model choosing a skill from its description, because free models trigger skills unreliably.
+  1. toolchain: `go vet`, unit tests, build; the exact commands are listed in `AGENTS.md` (from the Makefile)
+  2. `verify`: start the server on the seed DB (17), drive the touched routes with Playwright, take screenshots
+  3. `design-check`: compare UI changes with `docs/design-guidelines.md` (3); this covers non-prototype issues too, which the judge never sees
+  4. self-review in a fresh context (4a)
+- A failed step loops back to the fix; the loops count toward the attempt budget (9).
+- The screenshots from `verify` go into the PR's Testing section (4b).
+- **Role scoping:** `opencode.json` sets `permission.skill` to `"*": "deny"`, and each agent allowlists only its own skills. The builder can't load reviewer, judge or scenario skills.
+  - Never `ask`: headless runs have no one to approve, so the run would stall.
+  - opencode ignores `allowed-tools` in a skill; tool limits go in the agent config.
+- These skills are checks on the builder's side only. The independent gates (4, 4a, 6) still decide whether a PR merges.
+- Phase 0 measures the requests each skill uses (8c); a skill that costs more than it catches is dropped.
 
 ### 5. Environments: prod only
 - No staging. E2E runs in CI against a local server; deploy goes straight to the droplet, then smoke test, auto-revert on failure.
@@ -257,7 +277,7 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
 - **Revert fast path:** after a failed health check, `vinyl-deploy` has already swapped the binary back, so prod recovers first. The merger App then opens the revert PR as an exact `git revert <sha>`. The reviewer, satisfaction and `tier-gate` Apps recognize it and pass right away; CI still runs.
 
 ### 10. Self-modification
-- The main agent may change the factory: builder and triage prompts, router, guidelines other than the rubric (guardrail scope: see 10a).
+- The main agent may change the factory: builder and triage prompts, builder verification skills (4c), router, guidelines other than the rubric (guardrail scope: see 10a).
 - Every `factory-change` PR must be:
   - **Documented:** what changes and which files.
   - **Reasoned:** the evidence behind it (telemetry, failures).
@@ -270,7 +290,8 @@ Autonomous development of vinyl-session-page by opencode agents on free-tier mod
   - workflow files, and every script, Makefile target or config they execute
   - the scenarios repo, its workflows and app installations
   - the test-integrity guard and the holdout-isolation instructions
-  - judge, reviewer and scenario-agent prompts, and `REVIEW.md` (4a)
+  - judge, reviewer and scenario-agent prompts and skills, and `REVIEW.md` (4a)
+  - skill permissions in `opencode.json` (4c)
   - the risk-tier classifier and its path lists (1a)
   - the replay eval set (10b)
   - the rubric (`docs/design-guidelines.md`) and the satisfaction threshold
@@ -328,6 +349,7 @@ All through GitHub:
 ### 15. Harness
 - Build on the opencode GitHub integration for each agent role, with our own orchestration workflows for triage, fan-out, merge and deploy.
 - 🔍 **Verify first:** headless runs, per-role model selection, custom agents and prompts. Fallback: the `opencode run` CLI inside Actions jobs.
+- Skills are confirmed: opencode loads `SKILL.md` from `.opencode/skills`, `.claude/skills` and `.agents/skills`, through a `skill` tool, with per-agent permissions (4c).
 
 ### 16. Product north star
 - Working assumption: `REQUIREMENTS.md`.
@@ -372,7 +394,7 @@ All through GitHub:
 ## Pipeline (per issue)
 1. **Triage**: check the issue's clarity, predict which files it touches, label it, and fill in acceptance criteria.
 2. **Scenario agent**: write the holdout scenarios from the issue text in the private scenarios repo, prove they fail on `main` (auto-merged there). Criteria and scenarios are frozen.
-3. **Builder**: implement on a branch, with no access to the scenarios repo. For UI ambiguity, build 2–3 prototypes. Self-review in a fresh context before opening the PR (4a).
+3. **Builder**: implement on a branch, with no access to the scenarios repo. For UI ambiguity, build 2–3 prototypes. Run the verification chain (toolchain, `verify`, `design-check`, then self-review in a fresh context) before opening the PR (4c).
 4. **Judge**: fresh context, different model family; pick a prototype using code, screenshots and the rubric.
 5. **Reviewer**: fresh context, different model family; bug hunter plus verifier check spec fit, bugs, test quality and holdout isolation. At most 3 review-and-fix rounds (4a).
 6. **Satisfaction gate**: in the scenarios repo, run hard checks once and judged scenarios N times; merge needs all hard checks green and satisfaction ≥ threshold (4).
@@ -414,3 +436,5 @@ All through GitHub:
 - StepSecurity Harden-Runner: https://docs.stepsecurity.io/harden-runner/enable-runtime-security/github-hosted-runners
 - SQLite Online Backup API: https://www.sqlite.org/backup.html
 - Litestream: https://litestream.io/how-it-works/
+- Anthropic, Building verification loops in Claude Code with skills (embedded and chained checks, encoding repeated corrections): https://claude.com/resources/articles/building-verification-loops-in-claude-code-with-skills
+- opencode Agent Skills (locations, `skill` tool, per-agent permissions): https://opencode.ai/docs/skills/
